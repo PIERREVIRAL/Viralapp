@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viralapp — UI Components</title>
+  <link rel="icon" href="./favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./tokens.css">
+  <style>
+    h1,h2{font-family:var(--font-title)}
+    .nav{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .nav a{color:var(--neutral);text-decoration:none}
+    .nav a.primary{color:#0B1220;background:var(--primary);padding:8px 12px;border-radius:10px;font-weight:700}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    @media (max-width:1000px){.grid{grid-template-columns:1fr}}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .btn.secondary{background:transparent;color:var(--text);border:1px solid rgba(148,163,184,.3)}
+    .btn.ghost{background:transparent;color:var(--neutral)}
+    .btn.danger{background:#ef4444;color:#0b1220}
+    input,textarea,select{background:#0b1220;border:1px solid rgba(148,163,184,.2);color:var(--text);padding:10px 12px;border-radius:10px}
+    label{font-size:13px;color:var(--neutral)}
+    .formRow{display:flex;gap:12px;flex-wrap:wrap}
+    .cardHeader{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .alert{padding:12px;border-radius:12px;margin:8px 0}
+    .alert.success{background:#064e3b;color:#d1fae5;border:1px solid #065f46}
+    .alert.info{background:#0b3445;color:#c7faff;border:1px solid #113b4c}
+    .alert.warn{background:#4b3a09;color:#fde68a;border:1px solid #f59e0b}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#0b1220;border:1px solid rgba(148,163,184,.25)}
+    .badge{display:inline-block;background:var(--accent);color:#0B1220;padding:4px 10px;border-radius:999px;font-weight:700;font-size:12px}
+    .tab{padding:8px 12px;border-radius:10px;border:1px solid rgba(148,163,184,.2);cursor:pointer}
+    .tab.active{background:var(--primary);color:#0B1220;border-color:transparent}
+    .progress{width:100%;height:12px;border-radius:999px;background:#0b1220;border:1px solid rgba(148,163,184,.2);overflow:hidden}
+    .progress > span{display:block;height:100%;background:var(--primary);width:60%}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:24px}
+    .modal .panel{background:#111827;border:1px solid rgba(148,163,184,.2);border-radius:16px;max-width:520px;width:100%;padding:16px}
+    .link{color:var(--primary);text-decoration:none}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <div style="display:flex;gap:12px;align-items:center">
+        <img src="./logo.svg" alt="Viralapp logo" style="height:44px">
+        <span class="badge">UI Components</span>
+      </div>
+      <div><a href="./brand-kit.html">Brand Kit</a></div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <div class="cardHeader"><h2>Boutons</h2><span class="badge">Primary</span></div>
+        <div class="row">
+          <a class="btn" href="#">Prim.</a>
+          <a class="btn secondary" href="#">Second.</a>
+          <a class="btn ghost" href="#">Ghost</a>
+          <a class="btn danger" href="#">Danger</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="cardHeader"><h2>Formulaires</h2><span class="badge">Inputs</span></div>
+        <div class="formRow">
+          <div>
+            <label>Texte</label><br>
+            <input placeholder="Votre titre">
+          </div>
+          <div>
+            <label>Nombre</label><br>
+            <input type="number" value="2.5" style="width:100px">
+          </div>
+          <div>
+            <label>Choix</label><br>
+            <select>
+              <option>Option A</option>
+              <option>Option B</option>
+            </select>
+          </div>
+        </div>
+        <div class="formRow" style="margin-top:10px">
+          <div style="flex:1">
+            <label>Textarea</label><br>
+            <textarea placeholder="Votre script VO3..." rows="3"></textarea>
+          </div>
+        </div>
+        <div class="formRow" style="margin-top:10px">
+          <label><input type="checkbox" checked> Activer VO3</label>
+          <label><input type="radio" name="r" checked> Option 1</label>
+          <label><input type="radio" name="r"> Option 2</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="cardHeader"><h2>Progress & Badges</h2><span class="badge">Status</span></div>
+        <div class="progress"><span style="width:72%"></span></div>
+        <div class="row" style="margin-top:8px">
+          <span class="badge">Nouveau</span>
+          <span class="chip">Export MP4</span>
+          <span class="chip">1080×1920</span>
+          <span class="chip">CRF 22</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="cardHeader"><h2>Alertes</h2><span class="badge">Feedback</span></div>
+        <div class="alert success">✅ Opération réussie — votre reel est prêt.</div>
+        <div class="alert info">ℹ️ Traitement en cours — cela peut prendre quelques minutes.</div>
+        <div class="alert warn">⚠️ Lien YouTube invalide ou vidéo trop longue.</div>
+      </section>
+
+      <section class="card">
+        <div class="cardHeader"><h2>Cartes</h2><span class="badge">Surface</span></div>
+        <div class="row">
+          <div class="card" style="width:260px">
+            <div class="cardHeader">
+              <strong>Projet #1234</strong>
+              <a class="link" href="#">Détails</a>
+            </div>
+            <div class="progress"><span style="width:38%"></span></div>
+            <p style="font-size:12px;opacity:.8;margin-top:8px">Status: processing</p>
+          </div>
+          <div class="card" style="width:260px">
+            <div class="cardHeader">
+              <strong>Projet #8742</strong>
+              <a class="link" href="#">Détails</a>
+            </div>
+            <div class="progress"><span style="width:100%"></span></div>
+            <p style="font-size:12px;opacity:.8;margin-top:8px">Status: done</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="cardHeader"><h2>Modale</h2><span class="badge">Overlay</span></div>
+        <div class="row">
+          <a class="btn" href="#" id="openModal">Ouvrir</a>
+        </div>
+        <div class="modal" id="modal">
+          <div class="panel">
+            <div class="cardHeader"><strong>Confirmer l'export</strong><a href="#" id="closeModal" class="link">Fermer</a></div>
+            <p>Exporter le reel en 1080×1920 (CRF 22) ?</p>
+            <div class="row"><a class="btn" href="#">Exporter</a><a class="btn secondary" href="#" id="closeBottom">Annuler</a></div>
+          </div>
+        </div>
+        <script>
+          const m = document.getElementById('modal');
+          document.getElementById('openModal').onclick = (e)=>{e.preventDefault(); m.style.display='flex';};
+          document.getElementById('closeModal').onclick = (e)=>{e.preventDefault(); m.style.display='none';};
+          document.getElementById('closeBottom').onclick = (e)=>{e.preventDefault(); m.style.display='none';};
+        </script>
+      </section>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Tokens CSS (rappel)</h2>
+      <pre><code>:root{ --primary:#22D3EE; --ink:#0F172A; --accent:#F59E0B; --neutral:#94A3B8; --surface:#111827; --radius:14px }</code></pre>
+    </div>
+  </div>
+</body>
+</html>

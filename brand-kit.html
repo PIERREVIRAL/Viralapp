@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viralapp — Brand Kit</title>
+  <link rel="icon" href="./favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./tokens.css">
+  <style>
+    .nav{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .nav a{color:var(--neutral);text-decoration:none}
+    .nav a.primary{color:#0B1220;background:var(--primary);padding:8px 12px;border-radius:10px;font-weight:700}
+    h1,h2{font-family:var(--font-title)}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    @media (max-width:860px){.grid{grid-template-columns:1fr}}
+    .swatchRow{display:flex;align-items:center;gap:12px;margin:12px 0}
+    .tokenRow{display:flex;gap:10px;flex-wrap:wrap}
+    .kbd{border:1px solid rgba(148,163,184,.3);padding:2px 6px;border-radius:6px;background:#0b1220;color:var(--text);font-size:12px}
+    .sample{padding:10px;border:1px dashed rgba(148,163,184,.25);border-radius:10px;margin-top:6px}
+    .stack{display:flex;flex-direction:column;gap:8px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <div style="display:flex;gap:12px;align-items:center">
+        <img src="./logo.svg" alt="Viralapp logo" style="height:44px">
+        <span class="badge">Brand Kit</span>
+      </div>
+      <div><a href="./ui-components.html">UI Components</a></div>
+    </div>
+
+    <div class="card">
+      <h1 style="margin:0 0 6px">Identité de marque</h1>
+      <p class="token">Nom: <strong>Viralapp</strong></p>
+      <p class="token">Tagline: <strong>De YouTube aux Reels viraux, en 1 clic.</strong></p>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Couleurs</h2>
+        <div class="swatchRow">
+          <span class="swatch" style="background:#22D3EE"></span> <div><div>Primary</div><div class="kbd">#22D3EE</div></div>
+        </div>
+        <div class="swatchRow">
+          <span class="swatch" style="background:#0F172A"></span> <div><div>Ink (fond)</div><div class="kbd">#0F172A</div></div>
+        </div>
+        <div class="swatchRow">
+          <span class="swatch" style="background:#F59E0B"></span> <div><div>Accent</div><div class="kbd">#F59E0B</div></div>
+        </div>
+        <div class="swatchRow">
+          <span class="swatch" style="background:#94A3B8"></span> <div><div>Neutral</div><div class="kbd">#94A3B8</div></div>
+        </div>
+        <div class="sample">Usage: boutons primaires, liens d'action, éléments actifs.</div>
+      </section>
+
+      <section class="card">
+        <h2>Typographies</h2>
+        <div class="stack">
+          <div style="font-family:var(--font-title);font-weight:800;font-size:40px">Sora 800 — Titre H1</div>
+          <div style="font-family:var(--font-title);font-weight:700;font-size:28px">Sora 700 — Titre H2</div>
+          <div style="font-family:var(--font-body);font-weight:600">Inter 600 — Accent</div>
+          <div style="font-family:var(--font-body);font-weight:500">Inter 500 — UI Labels</div>
+          <div style="font-family:var(--font-body);opacity:.9">Inter 400 — Texte courant lisible</div>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Logo & Icône</h2>
+        <img src="./logo.svg" alt="Logo" style="height:84px;border:1px solid rgba(148,163,184,.15);border-radius:12px;background:#0B1220;padding:8px">
+        <div style="margin-top:10px">
+          <img src="./icon-512.svg" alt="Icon" style="height:120px;border-radius:24px;border:1px solid rgba(148,163,184,.2)">
+        </div>
+        <p class="token">Ne pas déformer, garder marges 16px mini.</p>
+      </section>
+
+      <section class="card">
+        <h2>Éléments UI</h2>
+        <div class="tokenRow">
+          <span class="token">Radius: 14px</span>
+          <span class="token">Bord: 1px rgba(148,163,184,.15)</span>
+          <span class="token">Ombre: douce</span>
+          <span class="token">Surface: #111827</span>
+        </div>
+        <div class="sample">
+          <a class="btn" href="#">Bouton primaire</a>
+          <span class="token">Carte</span>
+          <span class="token">Input</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="card">
+      <h2>Copy de référence</h2>
+      <p><strong>H1:</strong> De YouTube aux Reels viraux, en 1 clic.</p>
+      <p><strong>Sous-titre:</strong> Viralapp détecte les meilleurs passages, convertit en 9:16 et exporte un MP4 prêt à poster. VO3 crée des Reels à partir d’un simple script, sans vidéo.</p>
+      <p><strong>CTA:</strong> Essayer gratuitement</p>
+    </div>
+  </div>
+</body>
+</html>
