@@ -19,6 +19,6 @@
     "sentiment": "^5.0.2",
     "uuid": "^9.0.1",
     "ytdl-core": "4.11.5",
-    "youtube-transcript": "1.4.0"
+    "youtube-transcript": "^1.0.7"
   }
 }
