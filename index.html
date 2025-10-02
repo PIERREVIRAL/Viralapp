@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Viralapp — YouTube ➜ Reels + VO3</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;background:#0b1020;color:#e9eefb;margin:0}
+    header{padding:20px 24px;border-bottom:1px solid #223}
+    h1{margin:0;font-size:20px}
+    .wrap{max-width:880px;margin:24px auto;padding:0 16px}
+    .tabs{display:flex;gap:8px;margin-bottom:16px}
+    .tabs button{background:#121a33;border:1px solid #243055;color:#cfe1ff;padding:10px 14px;border-radius:10px;cursor:pointer}
+    .tabs button.active{background:#2641ff;border-color:#2641ff;color:#fff}
+    .card{background:#0f1730;border:1px solid #243055;border-radius:14px;padding:16px}
+    label{display:block;margin:10px 0 6px;color:#bcd}
+    input[type="text"],textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #2a3969;background:#101a36;color:#eaf}
+    textarea{min-height:140px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .row>*{flex:1}
+    .btn{background:#2843ff;border:none;color:#fff;padding:10px 16px;border-radius:10px;cursor:pointer}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    progress{width:100%;height:14px}
+    .muted{color:#99a8c8;font-size:12px}
+    .out{margin-top:12px}
+    .pill{display:inline-block;background:#13204d;border:1px solid #2843ff;color:#cfe1ff;padding:4px 8px;border-radius:999px;margin-right:6px}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Viralapp — Reels viraux en 1 clic (YouTube ➜ Reels) + VO3</h1>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button id="tab-yt" class="active">YouTube ➜ Reels</button>
+    <button id="tab-vo3">VO3 (reel texte)</button>
+  </div>
+
+  <div id="panel-yt" class="card">
+    <label>Lien YouTube</label>
+    <input id="ytUrl" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+    <div class="row">
+      <button id="btnYt" class="btn">Créer le projet</button>
+      <button id="btnStart" class="btn" disabled>Lancer le traitement</button>
+      <button id="btnDl" class="btn" disabled>Télécharger le reel</button>
+    </div>
+    <div class="out">
+      <div id="ytInfo" class="muted"></div>
+      <progress id="ytProg" value="0" max="100" style="display:none"></progress>
+    </div>
+  </div>
+
+  <div id="panel-vo3" class="card" style="display:none">
+    <label>Script (une ligne = 1 écran)</label>
+    <textarea id="vo3Script">3 astuces pour poster tous les jours :
+- Batcher 10 idées le dimanche
+- Garder 1 format simple
+- Doubler sur ce qui marche</textarea>
+    <div class="row">
+      <div>
+        <label>Durée par ligne (sec)</label>
+        <input id="vo3Dur" type="text" value="2.5">
+      </div>
+      <div>
+        <label>Couleur de fond</label>
+        <input id="vo3Bg" type="text" value="0x111827">
+      </div>
+      <div>
+        <label>Couleur du texte</label>
+        <input id="vo3Txt" type="text" value="white">
+      </div>
+    </div>
+    <div class="row">
+      <button id="btnVo3" class="btn">Générer le reel texte</button>
+      <button id="btnVo3Dl" class="btn" disabled>Télécharger le reel</button>
+    </div>
+    <div class="out">
+      <span class="pill">Option : vous pouvez ajouter une musique (clé “bgm” en POST /vo3)</span>
+      <div id="vo3Info" class="muted"></div>
+      <progress id="vo3Prog" value="0" max="100" style="display:none"></progress>
+    </div>
+  </div>
+</div>
+
+<script>
+// ← colle ici TON URL Railway
+const API_BASE = "https://viralapp-production.up.railway.app";
+
+// Tabs
+const tabY = document.getElementById('tab-yt');
+const tabV = document.getElementById('tab-vo3');
+tabY.onclick = ()=>{ tabY.classList.add('active'); tabV.classList.remove('active'); 
+  document.getElementById('panel-yt').style.display='block';
+  document.getElementById('panel-vo3').style.display='none';
+}
+tabV.onclick = ()=>{ tabV.classList.add('active'); tabY.classList.remove('active'); 
+  document.getElementById('panel-yt').style.display='none';
+  document.getElementById('panel-vo3').style.display='block';
+}
+
+// YouTube ➜ Reels
+let ytId=null;
+const ytUrl = document.getElementById('ytUrl');
+const ytInfo = document.getElementById('ytInfo');
+const ytProg = document.getElementById('ytProg');
+document.getElementById('btnYt').onclick = async ()=>{
+  ytInfo.textContent = "Création du projet...";
+  const fd = new FormData();
+  fd.append('youtube_link', ytUrl.value);
+  const res = await fetch(API_BASE + '/upload-video', { method:'POST', body: fd });
+  const data = await res.json();
+  ytId = data.projectId;
+  ytInfo.textContent = "Projet créé : " + ytId;
+  document.getElementById('btnStart').disabled = false;
+};
+document.getElementById('btnStart').onclick = async ()=>{
+  ytProg.style.display='block'; ytProg.value=0;
+  await fetch(API_BASE + '/process-video?projectId=' + ytId, { method:'POST' });
+  const poll = setInterval(async ()=>{
+    const r = await fetch(API_BASE + '/status?projectId=' + ytId);
+    const s = await r.json();
+    ytProg.value = s.progress||0;
+    ytInfo.textContent = `Statut: ${s.status||'-'} — ${ytProg.value}%`;
+    if (s.done) { clearInterval(poll); document.getElementById('btnDl').disabled=false; ytInfo.textContent = "Terminé ✅"; }
+  }, 1500);
+};
+document.getElementById('btnDl').onclick = ()=>{
+  window.open(API_BASE + '/export?videoId=' + ytId, '_blank');
+};
+
+// VO3
+let vo3Id=null;
+const vo3Info = document.getElementById('vo3Info');
+const vo3Prog = document.getElementById('vo3Prog');
+document.getElementById('btnVo3').onclick = async ()=>{
+  vo3Info.textContent = "Création du reel texte...";
+  const fd = new FormData();
+  fd.append('script', document.getElementById('vo3Script').value);
+  fd.append('perLineSec', document.getElementById('vo3Dur').value);
+  fd.append('bgColor', document.getElementById('vo3Bg').value);
+  fd.append('textColor', document.getElementById('vo3Txt').value);
+  const res = await fetch(API_BASE + '/vo3', { method:'POST', body: fd });
+  const data = await res.json();
+  vo3Id = data.projectId;
+  vo3Prog.style.display='block'; vo3Prog.value=10;
+  const poll = setInterval(async ()=>{
+    const r = await fetch(API_BASE + '/status?projectId=' + vo3Id);
+    const s = await r.json();
+    vo3Prog.value = s.progress||0;
+    vo3Info.textContent = `Statut: ${s.status||'-'} — ${vo3Prog.value}%`;
+    if (s.done) { clearInterval(poll); document.getElementById('btnVo3Dl').disabled=false; vo3Info.textContent = "Terminé ✅"; }
+  }, 1500);
+};
+document.getElementById('btnVo3Dl').onclick = ()=>{
+  window.open(API_BASE + '/export?videoId=' + vo3Id, '_blank');
+};
+</script>
+</body>
+</html>
