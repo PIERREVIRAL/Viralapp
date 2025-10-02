@@ -14,7 +14,7 @@ import ffmpegCore from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
 import ffprobePath from 'ffprobe-static';
 
-// ---- FFmpeg paths
+// ---- Config FFmpeg (chemins binaires)
 if (ffmpegPath) ffmpegCore.setFfmpegPath(ffmpegPath);
 if (ffprobePath && ffprobePath.path) ffmpegCore.setFfprobePath(ffprobePath.path);
 const ffmpeg = ffmpegCore;
@@ -26,24 +26,24 @@ app.use(express.json());
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// ---- Static frontend (serve /backend/public)
+// ---- Servir le FRONT (dossier /backend/public)
 app.use(express.static(join(__dirname, 'public')));
 
-// Healthcheck
+// ---- Route santé
 app.get('/health', (_req, res) => res.send('OK'));
 
-// Accueil -> index.html
+// ---- Accueil -> renvoie index.html
 app.get('/', (_req, res) => {
   res.sendFile(join(__dirname, 'public', 'index.html'));
 });
 
-// ---- Storage paths
+// ---- Dossiers de travail
 const DATA_DIR = join(__dirname, 'data');
 const OUTPUT_DIR = join(DATA_DIR, 'outputs');
 const UPLOAD_DIR = join(__dirname, 'uploads');
 [DATA_DIR, OUTPUT_DIR, UPLOAD_DIR].forEach(p => { if (!existsSync(p)) mkdirSync(p, { recursive: true }); });
 
-// ---- Tiny DB (JSON file)
+// ---- Mini “DB” JSON
 const DB_PATH = join(DATA_DIR, 'projects.json');
 function readDB() {
   if (!existsSync(DB_PATH)) writeFileSync(DB_PATH, JSON.stringify({ projects: [] }, null, 2));
@@ -68,7 +68,7 @@ const sentiment = new Sentiment();
 const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
 const FONT_LINUX = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
-// ---- Highlight picker
+// ---- Sélection de “highlights” à partir de segments (transcript)
 function pickHighlights(segments, n = 3) {
   const KEYWORDS = [/incroyable|astuce|secret|erreur|gagne|viral|tendance|conseil|méthode|stratégie|top/i];
   const scored = segments.map(s => {
@@ -96,7 +96,7 @@ function pickHighlights(segments, n = 3) {
   return top;
 }
 
-// ---- YouTube helpers
+// ---- Aides YouTube
 async function downloadYouTube(url) {
   const info = await ytdl.getInfo(url);
   const format = ytdl.chooseFormat(info.formats, { quality: 'highest', filter: 'audioandvideo' });
@@ -121,11 +121,11 @@ async function getTranscript(url) {
 }
 async function probeDuration(path) {
   return await new Promise((resolve) => {
-    ffmpeg.ffprobe(path, (err, data) => resolve(Number(data?.format?.duration || 0)));
+    ffmpeg.ffprobe(path, (_err, data) => resolve(Number(data?.format?.duration || 0)));
   });
 }
 
-// ---- Video ops
+// ---- Opérations vidéo
 async function makeVerticalClip(input, start, end) {
   const out = join(UPLOAD_DIR, `${randomUUID()}.mp4`);
   const filter =
@@ -151,7 +151,7 @@ async function concatClips(clips) {
   return out;
 }
 
-// ---- VO3 generator
+// ---- Générateur VO3 (texte -> vidéo verticale)
 async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', textColor='white', fontSize=60 }, bgmPath=null) {
   const lines = String(script||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0,40);
   if (!lines.length) throw new Error('Script vide');
@@ -185,7 +185,7 @@ async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', text
   return out;
 }
 
-// ---- API routes
+// ---- API
 app.post('/upload-video', upload.single('file'), async (req, res) => {
   try {
     const id = randomUUID();
@@ -267,8 +267,8 @@ app.post('/vo3', upload.single('bgm'), async (req,res)=>{
   }catch(e){ project.status='error'; project.error=String(e?.message||e); upsertProject(project); log('VO3 error',e); }})();
 });
 
-// Serve generated outputs
+// ---- Exposer les rendus
 app.use('/outputs', express.static(OUTPUT_DIR));
 
-// ---- Start server
+// ---- Lancer le serveur
 app.listen(PORT, ()=>log(`API running on :${PORT}`));
