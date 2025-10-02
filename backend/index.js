@@ -1,4 +1,4 @@
-// Viralapp — Backend (Node + Express + FFmpeg) avec mode VO3
+// Viralapp — Backend (Node + Express + FFmpeg)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -14,6 +14,7 @@ import ffmpegCore from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
 import ffprobePath from 'ffprobe-static';
 
+// ---- FFmpeg paths
 if (ffmpegPath) ffmpegCore.setFfmpegPath(ffmpegPath);
 if (ffprobePath && ffprobePath.path) ffmpegCore.setFfprobePath(ffprobePath.path);
 const ffmpeg = ffmpegCore;
@@ -24,11 +25,25 @@ app.use(express.json());
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
+
+// ---- Static frontend (serve /backend/public)
+app.use(express.static(join(__dirname, 'public')));
+
+// Healthcheck
+app.get('/health', (_req, res) => res.send('OK'));
+
+// Accueil -> index.html
+app.get('/', (_req, res) => {
+  res.sendFile(join(__dirname, 'public', 'index.html'));
+});
+
+// ---- Storage paths
 const DATA_DIR = join(__dirname, 'data');
 const OUTPUT_DIR = join(DATA_DIR, 'outputs');
 const UPLOAD_DIR = join(__dirname, 'uploads');
 [DATA_DIR, OUTPUT_DIR, UPLOAD_DIR].forEach(p => { if (!existsSync(p)) mkdirSync(p, { recursive: true }); });
 
+// ---- Tiny DB (JSON file)
 const DB_PATH = join(DATA_DIR, 'projects.json');
 function readDB() {
   if (!existsSync(DB_PATH)) writeFileSync(DB_PATH, JSON.stringify({ projects: [] }, null, 2));
@@ -46,12 +61,14 @@ function getProject(id) {
   return db.projects.find(p => p.id === id);
 }
 
+// ---- Utils
 const upload = multer({ dest: UPLOAD_DIR });
 const log = (...a)=>console.log('[viralapp]',...a);
 const sentiment = new Sentiment();
 const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
 const FONT_LINUX = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
+// ---- Highlight picker
 function pickHighlights(segments, n = 3) {
   const KEYWORDS = [/incroyable|astuce|secret|erreur|gagne|viral|tendance|conseil|méthode|stratégie|top/i];
   const scored = segments.map(s => {
@@ -79,6 +96,7 @@ function pickHighlights(segments, n = 3) {
   return top;
 }
 
+// ---- YouTube helpers
 async function downloadYouTube(url) {
   const info = await ytdl.getInfo(url);
   const format = ytdl.chooseFormat(info.formats, { quality: 'highest', filter: 'audioandvideo' });
@@ -106,6 +124,8 @@ async function probeDuration(path) {
     ffmpeg.ffprobe(path, (err, data) => resolve(Number(data?.format?.duration || 0)));
   });
 }
+
+// ---- Video ops
 async function makeVerticalClip(input, start, end) {
   const out = join(UPLOAD_DIR, `${randomUUID()}.mp4`);
   const filter =
@@ -131,6 +151,7 @@ async function concatClips(clips) {
   return out;
 }
 
+// ---- VO3 generator
 async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', textColor='white', fontSize=60 }, bgmPath=null) {
   const lines = String(script||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0,40);
   if (!lines.length) throw new Error('Script vide');
@@ -164,6 +185,7 @@ async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', text
   return out;
 }
 
+// ---- API routes
 app.post('/upload-video', upload.single('file'), async (req, res) => {
   try {
     const id = randomUUID();
@@ -173,6 +195,7 @@ app.post('/upload-video', upload.single('file'), async (req, res) => {
     res.json({ projectId:id });
   } catch(e){ log('upload error', e); res.status(500).json({ error:'upload_failed' }); }
 });
+
 app.post('/process-video', async (req, res) => {
   const id = String(req.query.projectId || '');
   const project = getProject(id);
@@ -211,16 +234,19 @@ app.post('/process-video', async (req, res) => {
     }catch(err){ log('process error',err); project.status='error'; project.error=String(err?.message||err); upsertProject(project); }
   })();
 });
+
 app.get('/status', (req,res)=> {
   const id = String(req.query.projectId||''); const p = getProject(id);
   if (!p) return res.status(404).json({ error:'project_not_found' });
   res.json({ progress:p.progress||0, done: p.status==='done', status:p.status, error:p.error||null });
 });
+
 app.get('/export', (req,res)=>{
   const id = String(req.query.videoId||''); const p = getProject(id);
   if (!p || !p.outputPath || !existsSync(p.outputPath)) return res.status(404).json({ error:'not_ready' });
   res.download(p.outputPath, `reel_${id}.mp4`);
 });
+
 app.post('/vo3', upload.single('bgm'), async (req,res)=>{
   const id = randomUUID();
   const script = (req.body.script||'').toString();
@@ -240,5 +266,9 @@ app.post('/vo3', upload.single('bgm'), async (req,res)=>{
     log('VO3 done',{id,out});
   }catch(e){ project.status='error'; project.error=String(e?.message||e); upsertProject(project); log('VO3 error',e); }})();
 });
+
+// Serve generated outputs
 app.use('/outputs', express.static(OUTPUT_DIR));
+
+// ---- Start server
 app.listen(PORT, ()=>log(`API running on :${PORT}`));
