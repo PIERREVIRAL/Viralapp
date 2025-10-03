@@ -1,4 +1,4 @@
-// Viralapp — Backend (Node + Express + FFmpeg) — robuste + rapide + diag
+// Viralapp — Backend (Node + Express + FFmpeg) — version légère (Railway friendly)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -15,15 +15,21 @@ import ffmpegCore from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import ffprobeStatic from 'ffprobe-static';
 
-// ---------- App & base
+// -------------------- Réglages “légers” pour éviter les plantages en PaaS --------------------
+const WIDTH = 720;          // au lieu de 1080
+const HEIGHT = 1280;        // au lieu de 1920
+const PRESET = 'ultrafast'; // rapide (peu de CPU)
+const CRF = '30';           // compression + élevée (moins de CPU/RAM)
+
+// -------------------- App de base --------------------
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
-// ---------- Choix du binaire ffmpeg/ffprobe (privilégie le système pour drawtext)
+// -------------------- Sélection ffmpeg/ffprobe --------------------
 function hasDrawtext(bin) {
   try {
     const out = execSync(`${bin} -hide_banner -filters`, { encoding: 'utf8' });
@@ -33,7 +39,6 @@ function hasDrawtext(bin) {
 function chooseFFmpeg() {
   const sysFFmpeg = '/usr/bin/ffmpeg';
   const sysFfprobe = '/usr/bin/ffprobe';
-
   let chosenFFmpeg = null;
   let chosenFfprobe = null;
 
@@ -52,10 +57,11 @@ function chooseFFmpeg() {
 chooseFFmpeg();
 const ffmpeg = ffmpegCore;
 
-// ---------- Front statique + santé + DIAG
+// -------------------- Front statique + santé + diag --------------------
 app.use(express.static(join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.send('OK'));
 
+// Police (pour drawtext)
 const FONT_CANDIDATES = [
   "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
   "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -76,17 +82,15 @@ app.get('/diag', (_req, res) => {
   res.json({ ffmpegPath, ffprobePath, hasDrawtext: hasDT, foundFont: FONT_LINUX || null });
 });
 
-app.get('/', (_req, res) => {
-  res.sendFile(join(__dirname, 'public', 'index.html'));
-});
+app.get('/', (_req, res) => res.sendFile(join(__dirname, 'public', 'index.html')));
 
-// ---------- Dossiers de travail
+// -------------------- Dossiers de travail --------------------
 const DATA_DIR = join(__dirname, 'data');
 const OUTPUT_DIR = join(DATA_DIR, 'outputs');
 const UPLOAD_DIR = join(__dirname, 'uploads');
 [DATA_DIR, OUTPUT_DIR, UPLOAD_DIR].forEach(p => { if (!existsSync(p)) mkdirSync(p, { recursive: true }); });
 
-// ---------- Mini “DB” JSON
+// -------------------- Mini “DB” JSON --------------------
 const DB_PATH = join(DATA_DIR, 'projects.json');
 function readDB() {
   if (!existsSync(DB_PATH)) writeFileSync(DB_PATH, JSON.stringify({ projects: [] }, null, 2));
@@ -104,14 +108,14 @@ function getProject(id) {
   return db.projects.find(p => p.id === id);
 }
 
-// ---------- Utils
+// -------------------- Utils --------------------
 const upload = multer({ dest: UPLOAD_DIR });
 const log = (...a)=>console.log('[viralapp]',...a);
 const sentiment = new Sentiment();
 const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
 
-// ---------- Sélection “highlights”
-function pickHighlights(segments, n = 3) {
+// -------------------- Highlights (YT) --------------------
+function pickHighlights(segments, n = 1) { // 1 clip pour limiter la charge
   const KEYWORDS = [/incroyable|astuce|secret|erreur|gagne|viral|tendance|conseil|méthode|stratégie|top/i];
   const scored = segments.map(s => {
     const words = s.text.split(/\s+/).filter(Boolean);
@@ -138,7 +142,7 @@ function pickHighlights(segments, n = 3) {
   return top;
 }
 
-// ---------- YouTube (robuste + rapide)
+// -------------------- YouTube (download robuste) --------------------
 async function downloadYouTube(url) {
   const tempPath = join(UPLOAD_DIR, `${randomUUID()}.mp4`);
   const stream = ytdl(url, {
@@ -170,21 +174,26 @@ async function probeDuration(path) {
   });
 }
 
-// ---------- Vidéo (ultrafast pour tests)
+// -------------------- FFmpeg helpers (version légère) --------------------
 async function makeVerticalClip(input, start, end) {
   const out = join(UPLOAD_DIR, `${randomUUID()}.mp4`);
   const filter =
-    "[0:v]scale=1080:-2,boxblur=40:8,scale=1080:1920:force_original_aspect_ratio=cover[bg];" +
-    "[0:v]scale=1080:-2,setsar=1[fg];" +
-    "[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1[v]";
+    `[0:v]scale=${WIDTH}:-2,boxblur=20:8,scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=cover[bg];` +
+    `[0:v]scale=${WIDTH}:-2,setsar=1[fg];` +
+    `[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1[v]`;
   await new Promise((res, rej) => {
-    ffmpeg(input).setStartTime(start).duration(Math.max(0.2,end-start))
-      .videoFilters(filter).audioFilters("loudnorm=I=-16:LRA=11:TP=-1.5").size("1080x1920")
+    ffmpeg(input)
+      .setStartTime(start)
+      .duration(Math.max(0.2, end - start))
+      .videoFilters(filter)
+      .audioFilters("loudnorm=I=-18:LRA=11:TP=-2")
+      .size(`${WIDTH}x${HEIGHT}`)
       .outputOptions([
         '-map','[v]','-map','0:a?',
         '-r','30',
-        '-preset','ultrafast',
-        '-crf','28',
+        '-threads','1',
+        '-preset', PRESET,
+        '-crf', CRF,
         '-movflags','+faststart'
       ])
       .save(out).on('end', res).on('error', rej);
@@ -194,13 +203,15 @@ async function makeVerticalClip(input, start, end) {
 async function concatClips(clips) {
   const out = join(OUTPUT_DIR, `${randomUUID()}.mp4`);
   await new Promise((res, rej) => {
-    const cmd = ffmpeg(); clips.forEach(c=>cmd.input(c));
+    const cmd = ffmpeg();
+    clips.forEach(c => cmd.input(c));
     cmd.videoCodec('libx264').audioCodec('aac')
       .outputOptions([
-        '-filter_complex',`concat=n=${clips.length}:v=1:a=1[v][a]`,
+        '-filter_complex', `concat=n=${clips.length}:v=1:a=1[v][a]`,
         '-map','[v]','-map','[a]',
-        '-preset','ultrafast',
-        '-crf','28',
+        '-threads','1',
+        '-preset', PRESET,
+        '-crf', CRF,
         '-movflags','+faststart'
       ])
       .save(out).on('end', res).on('error', rej);
@@ -208,33 +219,34 @@ async function concatClips(clips) {
   return out;
 }
 
-// ---------- VO3 (texte -> vidéo) — compatible polices
-async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', textColor='white', fontSize=60 }, bgmPath=null) {
-  const lines = String(script||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0,40);
+// -------------------- VO3 (texte -> vidéo) — léger --------------------
+async function createVO3Video({ script, perLineSec=2.2, bgColor='0x111827', textColor='white', fontSize=54 }, bgmPath=null) {
+  const lines = String(script||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0,32);
   if (!lines.length) throw new Error('Script vide');
   const total = Math.max(3, Math.round(perLineSec * lines.length));
   const esc = (s) => s.replace(/:/g,'\\:').replace(/'/g,"\\'").replace(/\[/g,'\\[').replace(/\]/g,'\\]').replace(/%/g,'\\%');
 
-  let vf = `[0:v]zoompan=z='min(zoom+0.0015,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=30*${total}[v0]`;
+  let vf = `[0:v]zoompan=z='min(zoom+0.001,1.1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=30*${total}[v0]`;
   let last='v0', chain=[];
   for (let i=0;i<lines.length;i++){
-    const t0=(i*perLineSec).toFixed(2), t1=((i+1)*perLineSec-0.2).toFixed(2);
+    const t0=(i*perLineSec).toFixed(2), t1=((i+1)*perLineSec-0.15).toFixed(2);
     const label=`v${i+1}`;
-    const baseDraw = `text='${esc(lines[i])}':fontcolor=${textColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=(h/2-text_h/2):box=1:boxcolor=black@0.35:boxborderw=30:shadowcolor=black:shadowx=2:shadowy=2:enable='between(t,${t0},${t1})'`;
+    const baseDraw = `text='${esc(lines[i])}':fontcolor=${textColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=(h/2-text_h/2):box=1:boxcolor=black@0.35:boxborderw=24:shadowcolor=black:shadowx=2:shadowy=2:enable='between(t,${t0},${t1})'`;
     const dt = FONT_LINUX ? `drawtext=fontfile=${FONT_LINUX}:${baseDraw}` : `drawtext=font=DejaVu Sans,Arial:${baseDraw}`;
     chain.push(`[${last}]${dt}[${label}]`); last=label;
   }
   const out = join(OUTPUT_DIR, `${randomUUID()}.mp4`);
   await new Promise((resolve, reject) => {
-    const src = `color=${bgColor}:s=1080x1920:r=30:d=${total}`;
+    const src = `color=${bgColor}:s=${WIDTH}x${HEIGHT}:r=30:d=${total}`;
     ffmpeg().input(`lavfi:${src}`)
       .complexFilter(vf + (chain.length?`;${chain.join(';')}`:''), `[v${lines.length}]`)
       .outputOptions([
         '-map',`[v${lines.length}]`,
         '-t',String(total),
         '-r','30',
-        '-preset','ultrafast',
-        '-crf','28',
+        '-threads','1',
+        '-preset', PRESET,
+        '-crf', CRF,
         '-movflags','+faststart'
       ])
       .save(out)
@@ -254,7 +266,7 @@ async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', text
   return out;
 }
 
-// ---------- API
+// -------------------- API --------------------
 app.post('/upload-video', upload.single('file'), async (req, res) => {
   try {
     const id = randomUUID();
@@ -319,10 +331,10 @@ app.get('/export', (req,res)=>{
 app.post('/vo3', upload.single('bgm'), async (req,res)=>{
   const id = randomUUID();
   const script = (req.body.script||'').toString();
-  const perLineSec = Number(req.body.perLineSec||2.5);
+  const perLineSec = Number(req.body.perLineSec||2.2);
   const bgColor = (req.body.bgColor||'0x111827').toString();
   const textColor = (req.body.textColor||'white').toString();
-  const fontSize = Number(req.body.fontSize||60);
+  const fontSize = Number(req.body.fontSize||54);
   const bgmPath = req.file ? req.file.path : null;
 
   const project = { id, status:'processing', progress:3, source:{ type:'vo3', script }, outputPath:null, meta:{ kind:'vo3' } };
@@ -339,8 +351,8 @@ app.post('/vo3', upload.single('bgm'), async (req,res)=>{
   }})();
 });
 
-// ---------- Exposer les fichiers générés
+// Exposer les outputs
 app.use('/outputs', express.static(OUTPUT_DIR));
 
-// ---------- Lancement
+// Lancement
 app.listen(PORT, ()=>log(`API running on :${PORT}`));
