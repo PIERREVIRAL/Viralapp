@@ -1,4 +1,4 @@
-// Viralapp — Backend (Node + Express + FFmpeg) — version stable + rapide
+// Viralapp — Backend (Node + Express + FFmpeg) — stable + rapide
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -67,7 +67,7 @@ const log = (...a)=>console.log('[viralapp]',...a);
 const sentiment = new Sentiment();
 const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
 
-// ---- Police robuste pour drawtext (évite l’erreur à 10%)
+// ---- Police robuste pour drawtext
 const FONT_CANDIDATES = [
   "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
   "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -103,16 +103,25 @@ function pickHighlights(segments, n = 3) {
   return top;
 }
 
-// ---- YouTube (mode “turbo” : pas de ré-encodage après download)
+// ---- YouTube (robuste + rapide)
 async function downloadYouTube(url) {
-  const info = await ytdl.getInfo(url);
-  const format = ytdl.chooseFormat(info.formats, { quality: 'highest', filter: 'audioandvideo' });
   const tempPath = join(UPLOAD_DIR, `${randomUUID()}.mp4`);
-  await new Promise((res, rej) => {
-    ytdl.downloadFromInfo(info, { quality: format.itag })
-      .pipe(createWriteStream(tempPath)).on('finish', res).on('error', rej);
+  const stream = ytdl(url, {
+    quality: 'highest',
+    filter: 'audioandvideo',
+    highWaterMark: 1 << 25, // 32MB pour limiter les erreurs réseau
+    requestOptions: {
+      headers: { 'user-agent': 'Mozilla/5.0', 'accept-language': 'en-US,en;q=0.9' },
+      timeout: 30000
+    }
   });
-  return { path: tempPath }; // ⏩ pas de normalisation ici pour accélérer les tests
+  await new Promise((resolve, reject) => {
+    stream.on('error', reject)
+      .pipe(createWriteStream(tempPath))
+      .on('finish', resolve)
+      .on('error', reject);
+  });
+  return { path: tempPath }; // pas de normalisation ici (mode rapide)
 }
 async function getTranscript(url) {
   try {
@@ -126,7 +135,7 @@ async function probeDuration(path) {
   });
 }
 
-// ---- Vidéo (ultrafast pour les tests)
+// ---- Vidéo (ultrafast pour tests)
 async function makeVerticalClip(input, start, end) {
   const out = join(UPLOAD_DIR, `${randomUUID()}.mp4`);
   const filter =
@@ -139,8 +148,8 @@ async function makeVerticalClip(input, start, end) {
       .outputOptions([
         '-map','[v]','-map','0:a?',
         '-r','30',
-        '-preset','ultrafast', // ⏩
-        '-crf','28',           // ⏩
+        '-preset','ultrafast',
+        '-crf','28',
         '-movflags','+faststart'
       ])
       .save(out).on('end', res).on('error', rej);
@@ -155,8 +164,8 @@ async function concatClips(clips) {
       .outputOptions([
         '-filter_complex',`concat=n=${clips.length}:v=1:a=1[v][a]`,
         '-map','[v]','-map','[a]',
-        '-preset','ultrafast', // ⏩
-        '-crf','28',           // ⏩
+        '-preset','ultrafast',
+        '-crf','28',
         '-movflags','+faststart'
       ])
       .save(out).on('end', res).on('error', rej);
@@ -164,7 +173,7 @@ async function concatClips(clips) {
   return out;
 }
 
-// ---- VO3 (texte -> vidéo) — robuste sur les polices
+// ---- VO3 (texte -> vidéo) — compatible polices
 async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', textColor='white', fontSize=60 }, bgmPath=null) {
   const lines = String(script||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0,40);
   if (!lines.length) throw new Error('Script vide');
@@ -189,8 +198,8 @@ async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', text
         '-map',`[v${lines.length}]`,
         '-t',String(total),
         '-r','30',
-        '-preset','ultrafast', // ⏩
-        '-crf','28',           // ⏩
+        '-preset','ultrafast',
+        '-crf','28',
         '-movflags','+faststart'
       ])
       .save(out)
@@ -242,7 +251,7 @@ app.post('/process-video', async (req, res) => {
       const durationSec = await probeDuration(inputPath);
       project.meta.durationSec = durationSec;
       if (!segments.length) segments = Array.from({length: Math.floor(durationSec/10)}, (_,i)=>({ start:i*10, end: Math.min(durationSec, i*10+10), text:' ' }));
-      // Pour tests rapides : 1 seul extrait
+      // pour valider vite : 1 seul clip
       const clipsMeta = pickHighlights(segments, 1);
 
       project.progress=45; upsertProject(project);
