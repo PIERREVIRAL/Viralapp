@@ -1,4 +1,4 @@
-// Viralapp — Backend (Node + Express + FFmpeg) — robuste & rapide
+// Viralapp — Backend (Node + Express + FFmpeg) — robuste + rapide + diag
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -15,6 +15,7 @@ import ffmpegCore from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import ffprobeStatic from 'ffprobe-static';
 
+// ---------- App & base
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -22,7 +23,7 @@ app.use(express.json());
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// ---------- Sélection du binaire FFmpeg/FFprobe (système d'abord, fallback sur ffmpeg-static)
+// ---------- Choix du binaire ffmpeg/ffprobe (privilégie le système pour drawtext)
 function hasDrawtext(bin) {
   try {
     const out = execSync(`${bin} -hide_banner -filters`, { encoding: 'utf8' });
@@ -30,46 +31,62 @@ function hasDrawtext(bin) {
   } catch { return false; }
 }
 function chooseFFmpeg() {
-  // Chemins système courants
   const sysFFmpeg = '/usr/bin/ffmpeg';
   const sysFfprobe = '/usr/bin/ffprobe';
 
   let chosenFFmpeg = null;
   let chosenFfprobe = null;
 
-  if (existsSync(sysFFmpeg) && hasDrawtext(sysFFmpeg)) {
-    chosenFFmpeg = sysFFmpeg;
-  }
-  if (existsSync(sysFfprobe)) {
-    chosenFfprobe = sysFfprobe;
-  }
+  if (existsSync(sysFFmpeg) && hasDrawtext(sysFFmpeg)) chosenFFmpeg = sysFFmpeg;
+  if (existsSync(sysFfprobe)) chosenFfprobe = sysFfprobe;
 
-  // Fallback sur ffmpeg-static si besoin
   if (!chosenFFmpeg && ffmpegStatic) chosenFFmpeg = ffmpegStatic;
   if (!chosenFfprobe && ffprobeStatic?.path) chosenFfprobe = ffprobeStatic.path;
 
   if (chosenFFmpeg) ffmpegCore.setFfmpegPath(chosenFFmpeg);
   if (chosenFfprobe) ffmpegCore.setFfprobePath(chosenFfprobe);
 
-  console.log('[viralapp] ffmpeg =', chosenFFmpeg || 'default PATH');
-  console.log('[viralapp] ffprobe =', chosenFfprobe || 'default PATH');
-  return { chosenFFmpeg, chosenFfprobe };
+  console.log('[viralapp] ffmpeg =', chosenFFmpeg || 'PATH');
+  console.log('[viralapp] ffprobe =', chosenFfprobe || 'PATH');
 }
 chooseFFmpeg();
 const ffmpeg = ffmpegCore;
 
-// ---------- Servir le FRONT (backend/public)
+// ---------- Front statique + santé + DIAG
 app.use(express.static(join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.send('OK'));
-app.get('/', (_req, res) => res.sendFile(join(__dirname, 'public', 'index.html')));
 
-// ---------- Dossiers
+const FONT_CANDIDATES = [
+  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+  "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+];
+const FONT_LINUX = FONT_CANDIDATES.find(p => existsSync(p)) || null;
+
+app.get('/diag', (_req, res) => {
+  let ffmpegPath = '';
+  let ffprobePath = '';
+  let hasDT = false;
+  try { ffmpegPath = execSync('which ffmpeg || true', { encoding: 'utf8' }).trim(); } catch {}
+  try { ffprobePath = execSync('which ffprobe || true', { encoding: 'utf8' }).trim(); } catch {}
+  try {
+    const filters = execSync(`${ffmpegPath || 'ffmpeg'} -hide_banner -filters || true`, { encoding: 'utf8' });
+    hasDT = /drawtext/.test(filters);
+  } catch {}
+  res.json({ ffmpegPath, ffprobePath, hasDrawtext: hasDT, foundFont: FONT_LINUX || null });
+});
+
+app.get('/', (_req, res) => {
+  res.sendFile(join(__dirname, 'public', 'index.html'));
+});
+
+// ---------- Dossiers de travail
 const DATA_DIR = join(__dirname, 'data');
 const OUTPUT_DIR = join(DATA_DIR, 'outputs');
 const UPLOAD_DIR = join(__dirname, 'uploads');
 [DATA_DIR, OUTPUT_DIR, UPLOAD_DIR].forEach(p => { if (!existsSync(p)) mkdirSync(p, { recursive: true }); });
 
-// ---------- Mini-DB JSON
+// ---------- Mini “DB” JSON
 const DB_PATH = join(DATA_DIR, 'projects.json');
 function readDB() {
   if (!existsSync(DB_PATH)) writeFileSync(DB_PATH, JSON.stringify({ projects: [] }, null, 2));
@@ -87,19 +104,11 @@ function getProject(id) {
   return db.projects.find(p => p.id === id);
 }
 
-// ---------- Uploads & utils
+// ---------- Utils
 const upload = multer({ dest: UPLOAD_DIR });
 const log = (...a)=>console.log('[viralapp]',...a);
 const sentiment = new Sentiment();
 const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
-
-// ---------- Police robuste pour drawtext
-const FONT_CANDIDATES = [
-  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-  "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-];
-const FONT_LINUX = FONT_CANDIDATES.find(p => existsSync(p)) || null;
 
 // ---------- Sélection “highlights”
 function pickHighlights(segments, n = 3) {
@@ -135,7 +144,7 @@ async function downloadYouTube(url) {
   const stream = ytdl(url, {
     quality: 'highest',
     filter: 'audioandvideo',
-    highWaterMark: 1 << 25, // 32MB pour limiter les "reset"
+    highWaterMark: 1 << 25, // 32MB
     requestOptions: {
       headers: { 'user-agent': 'Mozilla/5.0', 'accept-language': 'en-US,en;q=0.9' },
       timeout: 30000
@@ -147,7 +156,7 @@ async function downloadYouTube(url) {
       .on('finish', resolve)
       .on('error', reject);
   });
-  return { path: tempPath }; // pas de normalisation (plus rapide)
+  return { path: tempPath };
 }
 async function getTranscript(url) {
   try {
@@ -277,7 +286,7 @@ app.post('/process-video', async (req, res) => {
       const durationSec = await probeDuration(inputPath);
       project.meta.durationSec = durationSec;
       if (!segments.length) segments = Array.from({length: Math.floor(durationSec/10)}, (_,i)=>({ start:i*10, end: Math.min(durationSec, i*10+10), text:' ' }));
-      const clipsMeta = pickHighlights(segments, 1); // 1 clip pour tests rapides
+      const clipsMeta = pickHighlights(segments, 1); // 1 clip pour valider vite
 
       project.progress=45; upsertProject(project);
       const clipPaths=[];
@@ -330,8 +339,8 @@ app.post('/vo3', upload.single('bgm'), async (req,res)=>{
   }})();
 });
 
-// Fichiers générés
+// ---------- Exposer les fichiers générés
 app.use('/outputs', express.static(OUTPUT_DIR));
 
-// Lancement
+// ---------- Lancement
 app.listen(PORT, ()=>log(`API running on :${PORT}`));
