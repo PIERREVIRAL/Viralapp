@@ -1,0 +1,3 @@
+# Force l'installation de ffmpeg + fontconfig + polices DejaVu dans l'image
+[phases.setup]
+nixPkgs = ["ffmpeg", "fontconfig", "dejavu_fonts"]
