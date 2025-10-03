@@ -1,4 +1,4 @@
-// Viralapp — Backend (Node + Express + FFmpeg)
+// Viralapp — Backend (Node + Express + FFmpeg) — version stable + rapide
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -14,7 +14,7 @@ import ffmpegCore from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
 import ffprobePath from 'ffprobe-static';
 
-// ---- Config FFmpeg (chemins binaires)
+// ---- FFmpeg (binaires)
 if (ffmpegPath) ffmpegCore.setFfmpegPath(ffmpegPath);
 if (ffprobePath && ffprobePath.path) ffmpegCore.setFfprobePath(ffprobePath.path);
 const ffmpeg = ffmpegCore;
@@ -26,24 +26,24 @@ app.use(express.json());
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// ---- Servir le FRONT (dossier /backend/public)
+// ---- Servir le FRONT (backend/public)
 app.use(express.static(join(__dirname, 'public')));
 
-// ---- Route santé
+// Santé
 app.get('/health', (_req, res) => res.send('OK'));
 
-// ---- Accueil -> renvoie index.html
+// Accueil -> index.html
 app.get('/', (_req, res) => {
   res.sendFile(join(__dirname, 'public', 'index.html'));
 });
 
-// ---- Dossiers de travail
+// ---- Dossiers
 const DATA_DIR = join(__dirname, 'data');
 const OUTPUT_DIR = join(DATA_DIR, 'outputs');
 const UPLOAD_DIR = join(__dirname, 'uploads');
 [DATA_DIR, OUTPUT_DIR, UPLOAD_DIR].forEach(p => { if (!existsSync(p)) mkdirSync(p, { recursive: true }); });
 
-// ---- Mini “DB” JSON
+// ---- Mini-DB JSON
 const DB_PATH = join(DATA_DIR, 'projects.json');
 function readDB() {
   if (!existsSync(DB_PATH)) writeFileSync(DB_PATH, JSON.stringify({ projects: [] }, null, 2));
@@ -61,14 +61,21 @@ function getProject(id) {
   return db.projects.find(p => p.id === id);
 }
 
-// ---- Utils
+// ---- Uploads & utils
 const upload = multer({ dest: UPLOAD_DIR });
 const log = (...a)=>console.log('[viralapp]',...a);
 const sentiment = new Sentiment();
 const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
-const FONT_LINUX = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
-// ---- Sélection de “highlights” à partir de segments (transcript)
+// ---- Police robuste pour drawtext (évite l’erreur à 10%)
+const FONT_CANDIDATES = [
+  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+  "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
+];
+const FONT_LINUX = FONT_CANDIDATES.find(p => existsSync(p)) || null;
+
+// ---- Sélection “highlights”
 function pickHighlights(segments, n = 3) {
   const KEYWORDS = [/incroyable|astuce|secret|erreur|gagne|viral|tendance|conseil|méthode|stratégie|top/i];
   const scored = segments.map(s => {
@@ -96,7 +103,7 @@ function pickHighlights(segments, n = 3) {
   return top;
 }
 
-// ---- Aides YouTube
+// ---- YouTube (mode “turbo” : pas de ré-encodage après download)
 async function downloadYouTube(url) {
   const info = await ytdl.getInfo(url);
   const format = ytdl.chooseFormat(info.formats, { quality: 'highest', filter: 'audioandvideo' });
@@ -105,13 +112,7 @@ async function downloadYouTube(url) {
     ytdl.downloadFromInfo(info, { quality: format.itag })
       .pipe(createWriteStream(tempPath)).on('finish', res).on('error', rej);
   });
-  const normalized = join(UPLOAD_DIR, `${randomUUID()}.mp4`);
-  await new Promise((res, rej) => {
-    ffmpeg(tempPath).videoCodec('libx264').audioCodec('aac')
-      .outputOptions(['-movflags +faststart','-preset veryfast','-crf 23'])
-      .save(normalized).on('end', res).on('error', rej);
-  });
-  return { path: normalized };
+  return { path: tempPath }; // ⏩ pas de normalisation ici pour accélérer les tests
 }
 async function getTranscript(url) {
   try {
@@ -125,7 +126,7 @@ async function probeDuration(path) {
   });
 }
 
-// ---- Opérations vidéo
+// ---- Vidéo (ultrafast pour les tests)
 async function makeVerticalClip(input, start, end) {
   const out = join(UPLOAD_DIR, `${randomUUID()}.mp4`);
   const filter =
@@ -135,7 +136,13 @@ async function makeVerticalClip(input, start, end) {
   await new Promise((res, rej) => {
     ffmpeg(input).setStartTime(start).duration(Math.max(0.2,end-start))
       .videoFilters(filter).audioFilters("loudnorm=I=-16:LRA=11:TP=-1.5").size("1080x1920")
-      .outputOptions(['-map','[v]','-map','0:a?','-r','30','-preset','veryfast','-crf','22','-movflags','+faststart'])
+      .outputOptions([
+        '-map','[v]','-map','0:a?',
+        '-r','30',
+        '-preset','ultrafast', // ⏩
+        '-crf','28',           // ⏩
+        '-movflags','+faststart'
+      ])
       .save(out).on('end', res).on('error', rej);
   });
   return out;
@@ -145,13 +152,19 @@ async function concatClips(clips) {
   await new Promise((res, rej) => {
     const cmd = ffmpeg(); clips.forEach(c=>cmd.input(c));
     cmd.videoCodec('libx264').audioCodec('aac')
-      .outputOptions(['-filter_complex',`concat=n=${clips.length}:v=1:a=1[v][a]`,'-map','[v]','-map','[a]','-preset','veryfast','-crf','22','-movflags','+faststart'])
+      .outputOptions([
+        '-filter_complex',`concat=n=${clips.length}:v=1:a=1[v][a]`,
+        '-map','[v]','-map','[a]',
+        '-preset','ultrafast', // ⏩
+        '-crf','28',           // ⏩
+        '-movflags','+faststart'
+      ])
       .save(out).on('end', res).on('error', rej);
   });
   return out;
 }
 
-// ---- Générateur VO3 (texte -> vidéo verticale)
+// ---- VO3 (texte -> vidéo) — robuste sur les polices
 async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', textColor='white', fontSize=60 }, bgmPath=null) {
   const lines = String(script||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0,40);
   if (!lines.length) throw new Error('Script vide');
@@ -163,7 +176,8 @@ async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', text
   for (let i=0;i<lines.length;i++){
     const t0=(i*perLineSec).toFixed(2), t1=((i+1)*perLineSec-0.2).toFixed(2);
     const label=`v${i+1}`;
-    const dt=`drawtext=fontfile=${FONT_LINUX}:text='${esc(lines[i])}':fontcolor=${textColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=(h/2-text_h/2):box=1:boxcolor=black@0.35:boxborderw=30:shadowcolor=black:shadowx=2:shadowy=2:enable='between(t,${t0},${t1})'`;
+    const baseDraw = `text='${esc(lines[i])}':fontcolor=${textColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=(h/2-text_h/2):box=1:boxcolor=black@0.35:boxborderw=30:shadowcolor=black:shadowx=2:shadowy=2:enable='between(t,${t0},${t1})'`;
+    const dt = FONT_LINUX ? `drawtext=fontfile=${FONT_LINUX}:${baseDraw}` : `drawtext=font=DejaVu Sans,Arial:${baseDraw}`;
     chain.push(`[${last}]${dt}[${label}]`); last=label;
   }
   const out = join(OUTPUT_DIR, `${randomUUID()}.mp4`);
@@ -171,12 +185,23 @@ async function createVO3Video({ script, perLineSec=2.5, bgColor='0x111827', text
     const src = `color=${bgColor}:s=1080x1920:r=30:d=${total}`;
     ffmpeg().input(`lavfi:${src}`)
       .complexFilter(vf + (chain.length?`;${chain.join(';')}`:''), `[v${lines.length}]`)
-      .outputOptions(['-map',`[v${lines.length}]`,'-t',String(total),'-r','30','-preset','veryfast','-crf','22','-movflags','+faststart'])
+      .outputOptions([
+        '-map',`[v${lines.length}]`,
+        '-t',String(total),
+        '-r','30',
+        '-preset','ultrafast', // ⏩
+        '-crf','28',           // ⏩
+        '-movflags','+faststart'
+      ])
       .save(out)
       .on('end', async () => {
         if (!bgmPath) return resolve();
         const mixed = join(OUTPUT_DIR, `${randomUUID()}.mp4`);
-        ffmpeg().input(out).input(bgmPath).audioFilters('dynaudnorm=f=150:g=31,volume=0.6').videoCodec('copy').outputOptions(['-shortest','-movflags','+faststart']).save(mixed)
+        ffmpeg().input(out).input(bgmPath)
+          .audioFilters('dynaudnorm=f=150:g=31,volume=0.6')
+          .videoCodec('copy')
+          .outputOptions(['-shortest','-movflags','+faststart'])
+          .save(mixed)
           .on('end', () => { try { writeFileSync(out, readFileSync(mixed)); } catch{} resolve(); })
           .on('error', reject);
       })
@@ -213,17 +238,18 @@ app.post('/process-video', async (req, res) => {
       }
       project.progress=15; upsertProject(project);
       let segments = [];
-      if (project.source.youtubeUrl) segments = await getTranscript(project.source.youtubeUrl);
+      if (project.source?.youtubeUrl) segments = await getTranscript(project.source.youtubeUrl);
       const durationSec = await probeDuration(inputPath);
       project.meta.durationSec = durationSec;
       if (!segments.length) segments = Array.from({length: Math.floor(durationSec/10)}, (_,i)=>({ start:i*10, end: Math.min(durationSec, i*10+10), text:' ' }));
-      const clipsMeta = pickHighlights(segments, 3);
+      // Pour tests rapides : 1 seul extrait
+      const clipsMeta = pickHighlights(segments, 1);
 
       project.progress=45; upsertProject(project);
       const clipPaths=[];
       for (let i=0;i<clipsMeta.length;i++){
         const c=clipsMeta[i];
-        project.progress = clamp(45 + i*15, 45, 85); upsertProject(project);
+        project.progress = clamp(45 + i*40, 45, 85); upsertProject(project);
         clipPaths.push(await makeVerticalClip(inputPath, c.start, c.end));
       }
       project.progress=90; upsertProject(project);
@@ -263,12 +289,15 @@ app.post('/vo3', upload.single('bgm'), async (req,res)=>{
     project.progress=10; upsertProject(project);
     const out = await createVO3Video({ script, perLineSec, bgColor, textColor, fontSize }, bgmPath);
     project.progress=100; project.status='done'; project.outputPath=out; upsertProject(project);
-    log('VO3 done',{id,out});
-  }catch(e){ project.status='error'; project.error=String(e?.message||e); upsertProject(project); log('VO3 error',e); }})();
+    log('VO3 done',{id: id, out});
+  }catch(e){
+    project.status='error'; project.error=String(e?.message||e); upsertProject(project);
+    log('VO3 error', e);
+  }})();
 });
 
-// ---- Exposer les rendus
+// Fichiers générés
 app.use('/outputs', express.static(OUTPUT_DIR));
 
-// ---- Lancer le serveur
+// Lancement
 app.listen(PORT, ()=>log(`API running on :${PORT}`));
